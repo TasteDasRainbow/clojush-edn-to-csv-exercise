@@ -9,6 +9,7 @@
 
 ; The header line for the Individuals CSV file
 (def individuals-header-line "UUID:ID(Individual),Generation:int,Location:int,:LABEL")
+(def semantics-header-line "UUID:ID(Semantics),TotalError:int,:LABEL")
 
 ; Ignores (i.e., returns nil) any EDN entries that don't have the
 ; 'clojure/individual tag.
@@ -37,6 +38,17 @@
     (apply safe-println csv-file $))
   1)
 
+(defn uuid [] (str (java.util.UUID/randomUUID))
+
+(defn print-semantics-to-csv
+  [csv-file line]
+  (as-> line $
+    (concat $ [(uuid)])
+    (map $ [:total-errors])
+    (concat $ ["Semantics"] )
+    (apply safe-println csv-file $))
+  1)
+
 (defn edn->csv-sequential [edn-file csv-file]
   (with-open [out-file (io/writer csv-file)]
     (safe-println out-file individuals-header-line)
@@ -46,6 +58,7 @@
       (drop 1)
       (map (partial edn/read-string {:default individual-reader}))
       (map (partial print-individual-to-csv out-file))
+      (map (partial print-semantics-to-csv out-file))
       (reduce +)
       )))
 
@@ -86,17 +99,31 @@
        (if strategy
          (str "_" strategy)
          "_sequential")
-       "_Individuals.csv"))
-
+       "_Individuals.csv")
+  
+(defn build-semantics-csv-filename
+  [edn-filename strategy]
+  (str (fs/parent edn-filename)
+       "/"
+       (fs/base-name edn-filename ".edn")
+       (if strategy
+         (str "_" strategy)
+         "_sequential")
+       "_Semantics.csv")
+  
 (defn -main
   [edn-filename & [strategy]]
-  (let [individual-csv-file (build-individual-csv-filename edn-filename strategy)]
+  (let [semantics-csv-file (build-semantics-csv-filename edn-filename strategy)]
+
     (time
       (condp = strategy
-        "sequential" (edn->csv-sequential edn-filename individual-csv-file)
-        "pmap" (edn->csv-pmap edn-filename individual-csv-file)
-        "reducers" (edn->csv-reducers edn-filename individual-csv-file)
-        (edn->csv-sequential edn-filename individual-csv-file))))
+       "sequential" (edn->csv-sequential edn-filename semantics-csv-file)
+       ; "pmap" (edn->csv-pmap edn-filename individual-csv-file)
+       ; "pmap" (edn->csv-pmap edn-filename semantics-csv-file)
+      ;  "reducers" (edn->csv-reducers edn-filename individual-csv-file)
+       ; "reducers" (edn->csv-reducers edn-filename semantics-csv-file)
+       ; (edn->csv-sequential edn-filename individual-csv-file))))
+        (edn->csv-sequential edn-filename semantics-csv-file))))
   ; Necessary to get threads spun up by `pmap` to shutdown so you get
   ; your prompt back right away when using `lein run`.
   (shutdown-agents))
